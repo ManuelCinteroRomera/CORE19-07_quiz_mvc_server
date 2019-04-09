@@ -1,21 +1,17 @@
 const express = require('express');
 const app = express();
-
+// ======= Módulos y MWs auxiliares ======= //
 // Import MW for parsing POST params in BODY
 const bodyParser = require('body-parser');
 app.use(bodyParser.urlencoded({extended: true}));
-
 // Import MW supporting Method Override with express
+// HTML solo permite POST y GET, con el override se encapsula en el POST y en el GET
 const methodOverride = require('method-override');
 app.use(methodOverride('_method', {methods: ["POST", "GET"]}));
-
 // ========== MODEL ==========
-
 const Sequelize = require('sequelize');
-
 const options = {logging: false, operatorsAliases: false};
 const sequelize = new Sequelize("sqlite:quizzes.sqlite", options);
-
 const Quiz = sequelize.define(  // define Quiz model (table quizzes)
     'quiz',
     {
@@ -23,7 +19,6 @@ const Quiz = sequelize.define(  // define Quiz model (table quizzes)
         answer: Sequelize.STRING
     }
 );
-
 sequelize.sync() // Syncronize DB and seed if needed
     .then(() => Quiz.count())
     .then(count => {
@@ -40,11 +35,9 @@ sequelize.sync() // Syncronize DB and seed if needed
         }
     })
     .catch(console.log);
-
-
 // ========== VIEWs ==========
-
 // CSS style to include into the views:
+
 const style = `
         <style>
             .button { display: inline-block; text-decoration: none;
@@ -54,7 +47,10 @@ const style = `
             .button:hover { background: #356094; }
         </style>`;
 
+
+
 // View to display all the quizzes passed into the quizzes parameter.
+
 const indexView = quizzes =>
     `<!doctype html>
     <html>
@@ -64,23 +60,25 @@ const indexView = quizzes =>
         ${style}
     </head>
     <body>
-        <h1>Quizzes</h1>` +
+        <h1>Quizzes</h1><table>` +
+
     quizzes.map(quiz =>
-        `<div>
-                <a href="/quizzes/${quiz.id}/play">${quiz.question}</a>
-                <a href="/quizzes/${quiz.id}/edit"
-                   class="button">Edit</a>
-                <a href="/quizzes/${quiz.id}?_method=DELETE"
+        `<tr>
+                <td><a href="/quizzes/${quiz.id}/play">${quiz.question}</a></td>
+                <td><a href="/quizzes/${quiz.id}/edit"
+                   class="button">Edit</a></td>
+                <td><a href="/quizzes/${quiz.id}?_method=DELETE"
                    onClick="return confirm('Delete: ${quiz.question}')"
-                   class="button">Delete</a>
-             </div>`).join("\n") +
-    `<a href="/quizzes/new" class="button">New Quiz</a>
+                   class="button">Delete</a></td>
+             </tr>`).join("\n") +
+    `</table><a href="/quizzes/new" class="button">New Quiz</a>
     </body>
     </html>`;
 
-
 // View to play to the quiz passed into the quiz parameter.
+
 // response is the response typed in by the user.
+
 const playView = (quiz, response) =>
     `<!doctype html>
     <html>
@@ -100,8 +98,6 @@ placeholder="Answer" />
         <a href="/quizzes" class="button">Go back</a>
     </body>
     </html>`;
-
-
 // View to show the result of playing a quiz.
 // id is the id of the played quiz.
 // msg is the obtained result.
@@ -121,8 +117,6 @@ const resultView = (id, msg, response) =>
         <a href="/quizzes/${id}/play?response=${response}" class="button">Try again</a>
     </body>
     </html>`;
-
-
 // View to show a form to create a new quiz.
 const newView = (quiz) => {
     return `<!doctype html>
@@ -137,122 +131,152 @@ const newView = (quiz) => {
         <form method="POST" action="/quizzes">
             Question: <input type="text" name="question" value="${quiz.question}"
 placeholder="Question" /> <br />
-            Answer: <input type="text" name="answer"   value="${quiz.answer}"  
+            Answer: <input type="text" name="answer"   value="${quiz.answer}" 
 placeholder="Answer" />
             <input type="submit" class="button" value="Create" /> <br />
         </form>
         <a href="/quizzes" class="button">Go back</a>
     </body>
     </html>`;
-};
-
-
+}
 // View to show a form to edit the given quiz.
 const editView = (quiz) => {
-    // .... introducir código
-};
-
-
+    return `<!doctype html>
+                    <html>
+                    <head>
+                        <meta charset="utf-8">
+                        <title>P7: Quiz</title>
+                        ${style}
+                    </head>
+                    <body>
+                        <h1>Edit Quiz ${quiz.id} </h1>
+                        <form method="POST" action="/quizzes">
+                            Question: <input type="text" name="question" value="${quiz.question}"
+                placeholder="Question" /> <br />
+                            Answer: <input type="text" name="answer"   value="${quiz.answer}" 
+                placeholder="Answer" />
+                            <input type="submit" class="button" value="Edit" /> <br />
+                        </form>
+                        <a href="/quizzes" class="button">Go back</a>
+                    </body>
+                    </html>`
+}
 // ========== CONTROLLERs ==========
-
 // GET /, GET /quizzes
+// req = cabecera, res = respuesta del servidor (por defecto)
 const indexController = (req, res, next) => {
     Quiz.findAll()
         .then(quizzes => res.send(indexView(quizzes)))
         .catch(next);
 };
-
 //  GET  /quizzes/:id/play
 const playController = (req, res, next) => {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) return next(`id "${req.params.id}" is not a number.`);
-
     const response = req.query.response || "";
-
     Quiz.findByPk(id)   // Sequelize v5 utiliza findByPk en vez de findById (esta deprecado)
         .then(quiz => quiz ?
+            //Si quiz es true, es decir, si existe un quiz
             res.send(playView(quiz, response)) :
+            //Si no hay quiz, se va a next
             next(new Error(`Quiz ${id} not found.`)))
         .catch(next);
 };
-
-
 //  GET  /quizzes/:id/check
 const checkController = (req, res, next) => {
     const response = req.query.response;
-
     const id = Number(req.params.id);
     if (Number.isNaN(id)) return next(`id "${req.params.id}" is not a number.`);
-
     Quiz.findByPk(id)   // Sequelize v5 utiliza findByPk en vez de findById (esta deprecado)
         .then(quiz => {
-            if (!quiz) return next(new Error(`Quiz ${id} not found.`));
-
             const msg = (quiz.answer.toLowerCase().trim() ===
                 response.toLowerCase().trim()) ?
                 `Yes, "${response}" is the ${quiz.question}`
                 : `No, "${response}" is not the ${quiz.question}`;
-            res.send(resultView(id, msg, response));
+            return res.send(resultView(id, msg, response));
         })
         .catch(next);
 };
-
-
 // GET /quizzes/new
 const newController = (req, res, next) => {
     const quiz = {question: "", answer: ""};
     res.send(newView(quiz));
 };
-
 // POST /quizzes
 const createController = (req, res, next) => {
     let {question, answer} = req.body;
-
     Quiz.create({question, answer})
         .then(quiz => res.redirect('/quizzes'))
         .catch(next);
 };
-
 //  GET /quizzes/:id/edit
 const editController = (req, res, next) => {
-    // .... introducir código
+    const id = Number(req.params.id);
+    if (Number.isNaN(id)) return next(`id "${req.params.id}" is not a number.`);
+    Quiz.findByPk(id)
+        .then(quiz => quiz ?
+            res.send(editView(quiz)) :
+            next(new Error('Quiz ${quiz} not found'))
+        )
+        .catch(next);
 };
-
 //  PUT /quizzes/:id
 const updateController = (req, res, next) => {
-    // .... introducir código
+    let {question, answer} = req.body;
+    const id = Number(req.params.id);
+    if (Number.isNaN(id)) return next(`id "${req.params.id}" is not a number.`);
+    Quiz.findByPk(id)
+        .then(quiz => {
+            if (!quiz) {
+                return next (new Error('Quiz ${id} not found.'));
+            }
+            quiz.question = question;
+            quiz.answer = answer;
+            return quiz.save();
+        })
+        .then( () => res.redirect('/quizzes'))
+        .catch(next);
 };
-
 // DELETE /quizzes/:id
 const destroyController = (req, res, next) => {
-    // .... introducir código
+    const id = Number(req.params.id);
+    if (Number.isNaN(id)) return next(`id "${req.params.id}" is not a number.`);
+    Quiz.findByPk(id)
+        .then(quiz => {
+            if(quiz){
+                quiz.destroy().then(() => {
+                    res.redirect('/quizzes')
+                });
+            }else{
+                next(new Error(`Quiz ${id} no existe`))
+            }
+        });
 };
-
-
 // ========== ROUTES ==========
-
 app.get(['/', '/quizzes'], indexController);
 app.get('/quizzes/:id/play', playController);
 app.get('/quizzes/:id/check', checkController);
 app.get('/quizzes/new', newController);
 app.post('/quizzes', createController);
-
 // ..... crear rutas e instalar los MWs para:
 //   GET  /quizzes/:id/edit
+app.get('/quizzes/:id/edit', editController);
 //   PUT  /quizzes/:id
+app.put('/quizzes/:id', updateController);
 //   DELETE  /quizzes/:id
-
-
+app.delete('/quizzes/:id', destroyController);
 app.all('*', (req, res) =>
     res.status(404).send("Error: resource not found or method not supported.")
 );
 
-
 // Middleware to manage errors:
+
 app.use((error, req, res, next) => {
     console.log("Error:", error.message || error);
     res.redirect("/");
 });
-
 // Server started at port 8000
 app.listen(8000);
+//////////////// Interfaz Rest es lo que define todas las primitivas que vamos a manejar
+//////////////// GET / quizzes/:id (identificador del quiz)/(donde vamos a ir)
+//////////////// GET /quizzes/:id/check
